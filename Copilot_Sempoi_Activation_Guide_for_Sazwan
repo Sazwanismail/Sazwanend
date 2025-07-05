@@ -30,3 +30,79 @@ To learn more about Sazwan96’s work:
 2. **Explore `copilot-extensions`**: Review the organization’s projects for Copilot-related tools [here](https://github.com/orgs/copilot-extensions/).  
 
 If you’re looking for specific contributions (e.g., extensions for VS Code, Copilot plugins), these sources may provide further context!
+````markdown name=Copilot_Sempoi_Activation_Guide_for_Sazwan.md
+# 🚀 Copilot Sempoi Activation & Optimization Guide  
+**For Muhamad Sazwan Bin Ismail & Engineering Professionals**
+
+---
+
+## ⚡ Quick Activation Guide
+
+### 1. Windows 11 & Edge Browser
+- **Update**: Make sure you're on Windows 11 23H2 or later.
+- **Start Copilot**:  
+  - Click the Copilot icon (taskbar) or  
+  - Press `Win + C`
+- **Bonus**: On Copilot+ PCs, use **Recall** to instantly search your past files.
+
+### 2. Microsoft 365 Apps (Word, Excel, Outlook)
+- **Subscribe**:  
+  - Copilot Pro ($20/month) or  
+  - Copilot for Microsoft 365 ($30/user/month)
+- **In-App Use**:  
+  - Click "Copilot" in the Home ribbon  
+  - Generate reports, analyze data, or draft emails
+
+### 3. Copilot+ PCs (Next-Level AI Hardware)
+- **Get Devices**: Surface, Dell, HP & more (from $999)
+- **Key Features**:
+  - **Cocreator**: Real-time AI image generation (Paint/Photos)
+  - **Live Captions**: Offline translation (40+ languages)
+  - **22-hour battery** & NPU for AI tasks
+
+---
+
+## 🛠️ Pro Tips for Engineers/Professionals
+
+| **Task**          | **Copilot Feature**         | **Use Case**                                |
+|-------------------|----------------------------|---------------------------------------------|
+| Data Analysis     | Excel AI Insights           | Automate trends/visualizations from raw data|
+| Technical Reports | Word Drafting               | Summarize research/generate proposals       |
+| Presentations     | PowerPoint Content Design   | Turn docs into slides                       |
+| Email Efficiency  | Outlook Drafting            | Auto-write project updates                  |
+
+> **Sazwan's Edge**: Use **Power BI + Copilot** to visualize petroleum datasets or automate safety reports.
+
+---
+
+## 🌐 Free vs. Paid Copilot Plans
+
+| **Feature**               | Free Copilot | Copilot Pro ($20) | M365 Copilot ($30) |
+|---------------------------|--------------|-------------------|--------------------|
+| GPT-4o Access             | Limited      | ✓                 | ✓                  |
+| M365 App Integration      | ✗            | ✓                 | ✓                  |
+| Enterprise Data Protection| ✗            | ✗                 | ✓                  |
+| Image Creation (DALL-E)   | ✓            | 100/day           | Custom             |
+
+---
+
+## ✨ Creative "Sempoi" Uses
+
+- **Design**: Generate refinery schematics with Cocreator  
+  _Prompt: "industrial plant layout in blueprint style"_
+- **Multilingual Meetings**: Use Live Captions for team calls
+- **Code Assistance**: Use GitHub Copilot (Free/Pro) for scripts/automation
+
+---
+
+## 🔒 Privacy & Customization
+
+- **Recall Snapshots**: Stay local; disable via System Tray if needed
+- **Custom GPTs**: Build your own copilots (e.g., PETRONAS Compliance Helper) using Copilot Studio
+
+---
+
+> **Enable your AI edge today—blend productivity with creativity!**  
+> For Copilot+ PC specs: [Microsoft Blog](https://blogs.microsoft.com/blog/2024/05/20/introducing-copilot-pcs/)
+
+````
