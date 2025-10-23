@@ -1,0 +1,1578 @@
+# Enterprise-Grade Google Cloud Workstations: Development to Production Deployment
+
+I'll provide comprehensive enterprise deployment strategies covering the full lifecycle from development to production with enterprise-grade security, scalability, and operational excellence.
+
+## 🏢 **Enterprise Deployment Architecture**
+
+```html
+<!-- Add this as a new section after the hero -->
+<section id="enterprise-architecture">
+    <h2 class="section-title"><i class="fas fa-sitemap"></i> Enterprise Architecture</h2>
+    
+    <div class="card">
+        <h3>Multi-Environment Deployment Strategy</h3>
+        <p>Structured approach for development, staging, and production environments</p>
+        
+        <div class="code-container">
+            <pre><code class="language-yaml">
+# enterprise-deployment.yaml
+environments:
+  development:
+    project: "monospace-dev"
+    region: "asia-east1"
+    machine_type: "e2-standard-4"
+    disk_size: "50GB"
+    idle_timeout: "2h"
+    auto_start: true
+    
+  staging:
+    project: "monospace-staging"
+    region: "asia-east1"
+    machine_type: "e2-standard-8"
+    disk_size: "100GB"
+    idle_timeout: "1h"
+    auto_start: false
+    
+  production:
+    project: "monospace-prod"
+    region: "asia-east1"
+    machine_type: "n2-standard-8"
+    disk_size: "200GB"
+    idle_timeout: "30m"
+    auto_start: false
+    min_instances: 2
+    max_instances: 20
+            </code></pre>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Enterprise Network Architecture</h3>
+        <p>Secure network design with shared VPC and private service access</p>
+        
+        <div class="code-container">
+            <pre><code class="language-bash">
+# Create Shared VPC Host Project
+gcloud compute shared-vpc enable monospace-host-project
+gcloud compute shared-vpc associated-projects add monospace-dev \
+  --host-project monospace-host-project
+
+gcloud compute shared-vpc associated-projects add monospace-staging \
+  --host-project monospace-host-project
+
+gcloud compute shared-vpc associated-projects add monospace-prod \
+  --host-project monospace-host-project
+
+# Configure Private Google Access for Workstations
+gcloud compute networks subnets update default \
+  --region=asia-east1 \
+  --enable-private-ip-google-access \
+  --project=monospace-host-project
+
+# Create dedicated subnet for workstations
+gcloud compute networks subnets create workstations-subnet \
+  --network=default \
+  --range=10.0.1.0/24 \
+  --region=asia-east1 \
+  --enable-private-ip-google-access \
+  --project=monospace-host-project
+            </code></pre>
+        </div>
+    </div>
+</section>
+```
+
+## 🔄 **Enterprise CI/CD Pipeline**
+
+```html
+<section id="enterprise-cicd">
+    <h2 class="section-title"><i class="fas fa-rocket"></i> Enterprise CI/CD Pipeline</h2>
+    
+    <div class="card">
+        <h3>Multi-Stage Deployment Pipeline</h3>
+        
+        <div class="steps-container">
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h3>Development Environment</h3>
+                    <p>Automated workstation provisioning for developers</p>
+                    <div class="code-container">
+                        <pre><code class="language-yaml">
+# .github/workflows/dev-workstation.yml
+name: Development Workstation Deployment
+
+on:
+  push:
+    branches: [develop]
+  schedule:
+    - cron: '0 8 * * 1-5'  # Daily at 8 AM weekdays
+
+jobs:
+  deploy-dev-workstations:
+    runs-on: ubuntu-latest
+    environment: development
+    strategy:
+      matrix:
+        developer: [alice, bob, charlie, david]
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Authenticate to GCP
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_DEV_SA_KEY }}
+        project_id: monospace-dev
+
+    - name: Deploy Developer Workstation
+      run: |
+        gcloud workstations create ${{ matrix.developer }}-dev \
+          --cluster=dev-cluster \
+          --config=dev-config \
+          --region=asia-east1 \
+          --labels=environment=dev,owner=${{ matrix.developer }}
+
+    - name: Start Workstation
+      run: |
+        gcloud workstations start ${{ matrix.developer }}-dev \
+          --cluster=dev-cluster \
+          --config=dev-config \
+          --region=asia-east1
+                        </code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h3>Staging Environment</h3>
+                    <p>Production-like environment for testing and validation</p>
+                    <div class="code-container">
+                        <pre><code class="language-yaml">
+# .github/workflows/staging-deployment.yml
+name: Staging Environment Deployment
+
+on:
+  push:
+    branches: [release/*]
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Authenticate to GCP
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_STAGING_SA_KEY }}
+        project_id: monospace-staging
+
+    - name: Terraform Plan
+      run: |
+        cd terraform/staging
+        terraform init
+        terraform plan -var-file=staging.tfvars
+
+    - name: Terraform Apply
+      run: |
+        cd terraform/staging
+        terraform apply -var-file=staging.tfvars -auto-approve
+
+    - name: Run Integration Tests
+      run: |
+        ./scripts/run-integration-tests.sh
+        ./scripts/validate-workstation-config.sh
+
+    - name: Security Scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+                        </code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h3>Production Deployment</h3>
+                    <p>Blue-green deployment with canary testing</p>
+                    <div class="code-container">
+                        <pre><code class="language-yaml">
+# .github/workflows/production-deployment.yml
+name: Production Deployment
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deployment_strategy:
+        description: 'Deployment strategy'
+        required: true
+        default: 'blue-green'
+        type: choice
+        options:
+        - blue-green
+        - canary
+
+jobs:
+  production-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Authenticate to GCP
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_PROD_SA_KEY }}
+        project_id: monospace-prod
+
+    - name: Blue-Green Deployment
+      if: inputs.deployment_strategy == 'blue-green'
+      run: |
+        # Deploy to blue environment
+        ./scripts/deploy-blue.sh
+        
+        # Run smoke tests
+        ./scripts/smoke-test-blue.sh
+        
+        # Switch traffic to blue
+        ./scripts/switch-traffic.sh
+        
+        # Keep green for rollback
+        ./scripts/keep-green-for-rollback.sh
+
+    - name: Canary Deployment
+      if: inputs.deployment_strategy == 'canary'
+      run: |
+        # Deploy to 10% of users
+        ./scripts/deploy-canary.sh --percentage=10
+        
+        # Monitor metrics for 15 minutes
+        sleep 900
+        ./scripts/check-canary-health.sh
+        
+        # Roll forward to 100% or rollback
+        ./scripts/promote-canary.sh
+                        </code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+```
+
+## 🛡️ **Enterprise Security & Compliance**
+
+```html
+<section id="enterprise-security">
+    <h2 class="section-title"><i class="fas fa-user-shield"></i> Enterprise Security & Compliance</h2>
+    
+    <div class="card">
+        <h3>SOC 2 & ISO 27001 Compliance Framework</h3>
+        
+        <div class="troubleshooting-grid">
+            <div class="issue-card">
+                <h4><i class="fas fa-audit"></i> Audit Logging</h4>
+                <p>Comprehensive audit trail for compliance requirements</p>
+                <div class="code-container">
+                    <pre><code class="language-bash">
+# Enable Data Access Logs
+gcloud logging sinks create workstations-audit-logs \
+  bigquery.googleapis.com/projects/monospace-prod/datasets/audit_logs \
+  --log-filter='
+    resource.type="cloud_workstation" OR
+    resource.type="gce_instance" OR
+    protoPayload.methodName:"workstations"
+  ' \
+  --project=monospace-prod
+
+# Set up log retention policies
+gcloud logging buckets update _Default \
+  --location=global \
+  --retention-days=365 \
+  --project=monospace-prod
+
+# Export to BigQuery for analysis
+bq mk --dataset audit_logs
+                    </code></pre>
+                </div>
+            </div>
+
+            <div class="issue-card warning">
+                <h4><i class="fas fa-lock"></i> Encryption & Key Management</h4>
+                <p>Customer-managed encryption keys (CMEK)</p>
+                <div class="code-container">
+                    <pre><code class="language-bash">
+# Create Cloud KMS key ring and key
+gcloud kms keyrings create workstations-keyring \
+  --location=global \
+  --project=monospace-prod
+
+gcloud kms keys create workstations-key \
+  --keyring=workstations-keyring \
+  --location=global \
+  --purpose=encryption \
+  --protection-level=hsm \
+  --project=monospace-prod
+
+# Grant encryption permissions
+gcloud kms keys add-iam-policy-binding workstations-key \
+  --keyring=workstations-keyring \
+  --location=global \
+  --member=serviceAccount:service-712605920671@compute-system.iam.gserviceaccount.com \
+  --role=roles/cloudkms.cryptoKeyEncrypterDecrypter
+
+# Configure workstation with CMEK
+gcloud workstations configs update monospace-config-web \
+  --cluster=workstation-cluster-5 \
+  --region=asia-east1 \
+  --kms-key=projects/monospace-prod/locations/global/keyRings/workstations-keyring/cryptoKeys/workstations-key
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Identity & Access Management (IAM) Enterprise Patterns</h3>
+        
+        <div class="code-container">
+            <pre><code class="language-bash">
+# Organizational level policies
+gcloud organizations add-iam-policy-binding 123456789 \
+  --member=domain:company.com \
+  --role=roles/workstations.user
+
+# Folder level restrictions
+gcloud resource-manager folders add-iam-policy-binding 987654321 \
+  --member=group:workstations-admins@company.com \
+  --role=roles/workstations.admin
+
+# Project level service accounts
+gcloud projects add-iam-policy-binding monospace-prod \
+  --member=serviceAccount:workstation-cicd@monospace-prod.iam.gserviceaccount.com \
+  --role=roles/workstations.operationViewer
+
+# Conditional IAM policies
+gcloud iam policies create \
+  --organization=123456789 \
+  --file=conditional-iam-policy.yaml
+
+# conditional-iam-policy.yaml
+name: policies/123456789/policies/workstations-access
+spec:
+  rules:
+  - conditions:
+    - expression: >
+        resource.matchTag('123456789/env', 'production') &&
+        request.time.getHours("America/New_York") >= 9 &&
+        request.time.getHours("America/New_York") <= 17
+    values:
+      allowedValues:
+      - "roles/workstations.user"
+  - denials:
+    - principal: "user:external-contractor@partner.com"
+      permissions:
+      - "workstations.workstations.use"
+            </code></pre>
+        </div>
+    </div>
+</section>
+```
+
+## 📊 **Enterprise Monitoring & SLOs**
+
+```html
+<section id="enterprise-monitoring">
+    <h2 class="section-title"><i class="fas fa-chart-bar"></i> Enterprise Monitoring & SLOs</h2>
+    
+    <div class="card">
+        <h3>Service Level Objectives (SLOs) & Error Budgets</h3>
+        
+        <div class="code-container">
+            <pre><code class="language-yaml">
+# slo-definitions.yaml
+service_level_objectives:
+  - name: "workstation-availability"
+    display_name: "Workstation Availability"
+    goal: 0.995  # 99.5% availability
+    rolling_period: "30d"
+    service: "workstations.googleapis.com"
+    
+    sli:
+      windows_based:
+        window_period: "300s"
+        metric_mean_in_range:
+          time_series: "workstation.uptime"
+          range:
+            min: 0.99
+            max: 1.0
+            
+  - name: "workstation-startup-latency"
+    display_name: "Workstation Startup Latency"
+    goal: 0.99  # 99% of starts under 2 minutes
+    rolling_period: "30d"
+    
+    sli:
+      distribution_cut:
+        distribution_filter: "metric.type=\"workstation.startup.latency\""
+        range:
+          min: 0
+          max: 120000  # 2 minutes in milliseconds
+
+# Create SLOs
+gcloud beta monitoring slos create \
+  --service=workstations.googleapis.com \
+  --goal=0.995 \
+  --rolling-period=30d \
+  --display-name="Workstation Availability" \
+  --method=windows-based \
+  --window-period=300s \
+  --metric-mean-in-range=workstation.uptime,min=0.99,max=1.0
+            </code></pre>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Advanced Monitoring & Alerting</h3>
+        
+        <div class="code-container">
+            <pre><code class="language-json">
+{
+  "displayName": "Workstation Error Budget Burn Rate",
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "High Error Budget Burn Rate",
+      "conditionThreshold": {
+        "filter": "metric.type=\"monitoring.googleapis.com/slo/error_budget_burn_rate\" resource.type=\"consumed_api\" resource.label.\"service\"=\"workstations.googleapis.com\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 10,
+        "duration": "600s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "documentation": {
+    "content": "Error budget burn rate exceeded 10x. Consider pausing deployments.",
+    "mimeType": "text/markdown"
+  },
+  "notificationChannels": [
+    "projects/monospace-prod/notificationChannels/123456"
+  ],
+  "userLabels": {
+    "service": "workstations",
+    "severity": "critical"
+  }
+}
+            </code></pre>
+        </div>
+    </div>
+</section>
+```
+
+## 🔄 **Disaster Recovery & Business Continuity**
+
+```html
+<section id="disaster-recovery">
+    <h2 class="section-title"><i class="fas fa-sync"></i> Disaster Recovery & Business Continuity</h2>
+    
+    <div class="card">
+        <h3>Multi-Region Deployment Strategy</h3>
+        
+        <div class="steps-container">
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h3>Active-Passive Regional Deployment</h3>
+                    <p>Primary region with warm standby in secondary region</p>
+                    <div class="code-container">
+                        <pre><code class="language-bash">
+# Primary region (Asia)
+gcloud workstations clusters create cluster-asia \
+  --region=asia-east1 \
+  --network=projects/monospace-host-project/global/networks/default \
+  --subnetwork=projects/monospace-host-project/regions/asia-east1/subnetworks/workstations-subnet \
+  --project=monospace-prod
+
+# Secondary region (Europe - standby)
+gcloud workstations clusters create cluster-europe \
+  --region=europe-west1 \
+  --network=projects/monospace-host-project/global/networks/default \
+  --subnetwork=projects/monospace-host-project/regions/europe-west1/subnetworks/workstations-subnet \
+  --project=monospace-prod \
+  --labels=environment=dr-standby
+
+# Configure DNS failover
+gcloud dns record-sets create workstations.company.com. \
+  --type=A \
+  --routing-policy=geo \
+  --routing-data="asia-east1=10.0.1.10" \
+  --routing-data="europe-west1=10.0.2.10" \
+  --ttl=300
+                        </code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h3>Automated Failover Procedures</h3>
+                    <p>Scripted failover with health checks and traffic migration</p>
+                    <div class="code-container">
+                        <pre><code class="language-bash">
+#!/bin/bash
+# scripts/failover-to-dr.sh
+
+PRIMARY_REGION="asia-east1"
+SECONDARY_REGION="europe-west1"
+
+# Check primary region health
+HEALTH_STATUS=$(gcloud workstations clusters describe cluster-asia \
+  --region=$PRIMARY_REGION \
+  --format="value(health)")
+
+if [ "$HEALTH_STATUS" != "HEALTHY" ]; then
+    echo "Primary region unhealthy. Initiating failover..."
+    
+    # Scale up secondary region
+    gcloud workstations clusters update cluster-europe \
+      --region=$SECONDARY_REGION \
+      --min-scale=5 \
+      --max-scale=50
+    
+    # Update DNS to route to secondary region
+    gcloud dns record-sets update workstations.company.com. \
+      --type=A \
+      --routing-policy=geo \
+      --routing-data="$SECONDARY_REGION=10.0.2.10" \
+      --routing-data="$PRIMARY_REGION=10.0.1.10" \
+      --ttl=60  # Lower TTL for faster failback
+    
+    # Send alert
+    gcloud monitoring channels send \
+      --channel="projects/monospace-prod/notificationChannels/123456" \
+      --message="DR Failover activated: Primary region $PRIMARY_REGION unavailable"
+fi
+                        </code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h3>Backup & Recovery Procedures</h3>
+                    <p>Regular backups of workstation configurations and data</p>
+                    <div class="code-container">
+                        <pre><code class="language-bash">
+# Export workstation configurations
+gcloud workstations configs list \
+  --cluster=cluster-asia \
+  --region=asia-east1 \
+  --format=json > workstation-configs-backup-$(date +%Y%m%d).json
+
+# Backup persistent disks (if using custom images)
+gcloud compute disks snapshot workstation-disk \
+  --zone=asia-east1-a \
+  --snapshot-names=workstation-disk-$(date +%Y%m%d-%H%M%S)
+
+# Automated backup script
+#!/bin/bash
+# scripts/backup-workstations.sh
+
+BACKUP_BUCKET="gs://monospace-prod-backups/workstations"
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+
+# Backup configurations
+gcloud workstations configs list --format=json \
+  | gsutil cp - $BACKUP_BUCKET/configs/configs-$TIMESTAMP.json
+
+# Backup IAM policies
+gcloud projects get-iam-policy monospace-prod \
+  | gsutil cp - $BACKUP_BUCKET/iam/iam-policy-$TIMESTAMP.json
+
+# Retention policy: keep 30 daily, 12 monthly backups
+gsutil retention set 30d $BACKUP_BUCKET
+                        </code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+```
+
+## 💰 **Cost Management & Optimization**
+
+```html
+<section id="cost-optimization">
+    <h2 class="section-title"><i class="fas fa-chart-pie"></i> Enterprise Cost Management</h2>
+    
+    <div class="card">
+        <h3>Cost Allocation & Chargeback</h3>
+        
+        <div class="troubleshooting-grid">
+            <div class="issue-card">
+                <h4><i class="fas fa-tags"></i> Resource Labeling</h4>
+                <p>Comprehensive labeling for cost allocation</p>
+                <div class="code-container">
+                    <pre><code class="language-bash">
+# Create workstations with cost allocation labels
+gcloud workstations create developer-workstation \
+  --cluster=dev-cluster \
+  --config=dev-config \
+  --region=asia-east1 \
+  --labels= \
+    cost-center=engineering,\
+    project=monospace-app,\
+    team=frontend,\
+    environment=development,\
+    owner=alice@company.com
+
+# Update existing workstations with labels
+gcloud workstations update idx-studio-1746147003713 \
+  --cluster=workstation-cluster-5 \
+  --region=asia-east1 \
+  --update-labels= \
+    cost-center=product-dev,\
+    project=idx-studio,\
+    team=platform-engineering
+                    </code></pre>
+                </div>
+            </div>
+
+            <div class="issue-card warning">
+                <h4><i class="fas fa-money-bill-wave"></i> Budget Alerts & Quotas</h4>
+                <p>Proactive cost monitoring and controls</p>
+                <div class="code-container">
+                    <pre><code class="language-bash">
+# Create project-level budget
+gcloud billing budgets create \
+  --display-name="Workstations Monthly Budget" \
+  --billing-account=123456-789012-ABCDEF \
+  --amount=5000USD \
+  --threshold-rule=percent=0.5 \
+  --threshold-rule=percent=0.8 \
+  --threshold-rule=percent=0.95 \
+  --filter='projects:"monospace-prod" AND labels.workstation_cost_center:engineering'
+
+# Set compute engine quotas
+gcloud compute project-info describe \
+  --project=monospace-prod \
+  --format="value(quotas)"
+
+# Cost breakdown by label
+gcloud billing accounts list --format="value(name)"
+gcloud beta billing budgets list --billing-account=123456-789012-ABCDEF
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Automated Cost Optimization</h3>
+        
+        <div class="code-container">
+            <pre><code class="language-yaml">
+# cost-optimization-automation.yaml
+automated_actions:
+  - name: "stop-idle-workstations"
+    description: "Stop workstations idle for more than 4 hours"
+    schedule: "0 */4 * * *"
+    action: |
+      gcloud workstations stop $(gcloud workstations list \
+        --filter="status:RUNNING AND labels.auto_stop:true" \
+        --format="value(name)") \
+        --cluster=workstation-cluster-5 \
+        --region=asia-east1
+    
+  - name: "rightsize-underutilized"
+    description: "Downsize underutilized workstations"
+    schedule: "0 2 * * *"
+    action: |
+      # Check CPU utilization < 20% for 7 days
+      UNDERUTILIZED=$(gcloud monitoring metrics read \
+        "compute.googleapis.com/instance/cpu/utilization" \
+        --filter='resource.labels.instance_id =~ "workstation-*" AND metric.utilization < 0.2' \
+        --format="value(resource.labels.instance_id)")
+      
+      for instance in $UNDERUTILIZED; do
+        gcloud workstations update $instance \
+          --machine-type=e2-standard-4 \
+          --cluster=workstation-cluster-5 \
+          --region=asia-east1
+      done
+    
+  - name: "cleanup-stopped-workstations"
+    description: "Delete workstations stopped for more than 30 days"
+    schedule: "0 1 * * 0"
+    action: |
+      OLD_WORKSTATIONS=$(gcloud workstations list \
+        --filter="status:STOPPED AND createTime < -P30D" \
+        --format="value(name)")
+      
+      echo $OLD_WORKSTATIONS | xargs -n 1 gcloud workstations delete \
+        --cluster=workstation-cluster-5 \
+        --region=asia-east1 \
+        --quiet
+            </code></pre>
+        </div>
+    </div>
+</section>
+```
+
+## 🎯 **Updated Enterprise Navigation**
+
+Add these enterprise sections to your sidebar:
+
+```html
+<ul>
+    <li><a href="#enterprise-architecture"><i class="fas fa-sitemap"></i> Enterprise Architecture</a></li>
+    <li><a href="#enterprise-cicd"><i class="fas fa-rocket"></i> Enterprise CI/CD</a></li>
+    <li><a href="#enterprise-security"><i class="fas fa-user-shield"></i> Enterprise Security</a></li>
+    <li><a href="#enterprise-monitoring"><i class="fas fa-chart-bar"></i> Enterprise Monitoring</a></li>
+    <li><a href="#disaster-recovery"><i class="fas fa-sync"></i> Disaster Recovery</a></li>
+    <li><a href="#cost-optimization"><i class="fas fa-chart-pie"></i> Cost Management</a></li>
+    <li><a href="#authentication"><i class="fas fa-key"></i> Authentication</a></li>
+    <li><a href="#troubleshooting"><i class="fas fa-tools"></i> Troubleshooting</a></li>
+</ul>
+```
+
+This enterprise-grade documentation now provides:
+
+1. **Multi-environment strategy** with proper separation of concerns
+2. **Advanced CI/CD pipelines** with blue-green and canary deployments
+3. **Enterprise security** with compliance frameworks and encryption
+4. **SLO-based monitoring** with error budgets
+5. **Disaster recovery** with multi-region failover
+6. **Cost optimization** with automated resource management
+
+The documentation covers the complete enterprise lifecycle from development through production with enterprise-grade security, scalability, and operational excellence.RUN code-oss --install-extension ms-python.python \
+    && code-oss --install-extension bradlc.vscode-tailwindcss \
+    && code-oss --install-extension esbenp.prettier-vscode
+
+# Set up workspace
+RUN mkdir -p /workspace \
+    && chmod 755 /workspace
+
+WORKDIR /workspace
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/ || exit 1
+            </code></pre>
+        </div>
+
+        <div class="code-container">
+            <div class="code-header">
+                <span>Build and Deploy Custom Image</span>
+                <button class="copy-btn" onclick="copyCode(this)"><i class="fas fa-copy"></i> Copy</button>
+            </div>
+            <pre><code class="language-bash">
+# Build the custom image
+gcloud auth configure-docker asia-docker.pkg.dev
+docker build -t asia-docker.pkg.dev/monospace-10/workstation-images/custom-dev:latest .
+
+# Push to Artifact Registry
+docker push asia-docker.pkg.dev/monospace-10/workstation-images/custom-dev:latest
+
+# Configure workstation to use custom image
+gcloud workstations configs update monospace-config-web \
+  --cluster=workstation-cluster-5 \
+  --region=asia-east1 \
+  --container-custom-image=asia-docker.pkg.dev/monospace-10/workstation-images/custom-dev:latest
+
+# Verify the configuration
+gcloud workstations configs describe monospace-config-web \
+  --cluster=workstation-cluster-5 \
+  --region=asia-east1 \
+  --format="value(container.image)"
+            </code></pre>
+        </div>
+    </div>
+</section>
+```
+
+## 🔧 **Advanced Troubleshooting Guide**
+
+### **Comprehensive Diagnostics**
+
+```html
+<section id="advanced-troubleshooting">
+    <h2 class="section-title"><i class="fas fa-stethoscope"></i> Advanced Troubleshooting</h2>
+    
+    <div class="card">
+        <h3>Comprehensive Diagnostic Script</h3>
+        <p>Automated script to diagnose common workstation issues</p>
+        
+        <div class="code-container">
+            <div class="code-header">
+                <span>diagnose-workstation.sh</span>
+                <button class="copy-btn" onclick="copyCode(this)"><i class="fas fa-copy"></i> Copy</button>
+            </div>
+            <pre><code class="language-bash">
+#!/bin/bash
+
+# Workstation Diagnostic Script
+WORKSTATION_NAME="idx-studio-1746147003713"
+CLUSTER="workstation-cluster-5"
+CONFIG="monospace-config-web"
+REGION="asia-east1"
+PROJECT="monospace-10"
+
+echo "🔍 Starting Workstation Diagnostics..."
+echo "Project: $PROJECT"
+echo "Workstation: $WORKSTATION_NAME"
+echo ""
+
+# Check workstation status
+echo "📊 Workstation Status:"
+gcloud workstations describe $WORKSTATION_NAME \
+  --cluster=$CLUSTER \
+  --config=$CONFIG \
+  --region=$REGION \
+  --format="table(name, state, createTime, host)"
+
+# Check cluster health
+echo ""
+echo "🏥 Cluster Health:"
+gcloud workstations clusters describe $CLUSTER \
+  --region=$REGION \
+  --format="table(name, network, subnetwork, conditions)"
+
+# Check configuration
+echo ""
+echo "⚙️ Configuration Details:"
+gcloud workstations configs describe $CONFIG \
+  --cluster=$CLUSTER \
+  --region=$REGION \
+  --format="table(container.image, machineType, diskSizeGb, idleTimeout)"
+
+# Check IAM permissions
+echo ""
+echo "🔐 IAM Permissions Check:"
+gcloud workstations list-grantable-iam-policies \
+  projects/$PROJECT/locations/$REGION/workstationClusters/$CLUSTER
+
+# Check network connectivity
+echo ""
+echo "🌐 Network Diagnostics:"
+gcloud compute networks list --filter="name:default" --format="table(name, subnetworks)"
+
+# Check firewall rules
+echo ""
+echo "🛡️ Firewall Rules:"
+gcloud compute firewall-rules list --filter="network:default" --format="table(name, allowed, direction)"
+
+# Check operations history
+echo ""
+echo "📈 Recent Operations:"
+gcloud workstations operations list \
+  --cluster=$CLUSTER \
+  --region=$REGION \
+  --limit=5 \
+  --format="table(name, operationType, done, error)"
+
+# Check logs for errors
+echo ""
+echo "📋 Recent Error Logs:"
+gcloud logging read \
+  "resource.type=cloud_workstation AND severity>=ERROR" \
+  --project=$PROJECT \
+  --limit=10 \
+  --format="table(timestamp, logName, severity, jsonPayload.message)"
+
+echo ""
+echo "✅ Diagnostics complete. Check above for any issues."
+            </code></pre>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Common Error Solutions</h3>
+        
+        <div class="troubleshooting-grid">
+            <div class="issue-card danger">
+                <h4><i class="fas fa-network-wired"></i> Network Configuration Issues</h4>
+                <p>Workstation cannot access required services</p>
+                <div class="code-container">
+                    <pre><code class="language-bash">
+# Enable Private Google Access
+gcloud compute networks subnets update default \
+  --region=asia-east1 \
+  --enable-private-ip-google-access
+
+# Create firewall rule for workstation communication
+gcloud compute firewall-rules create allow-workstation-communication \
+  --network=default \
+  --allow=tcp:22,tcp:80,tcp:443,tcp:8080,tcp:3000,tcp:5000 \
+  --source-ranges=10.0.0.0/8 \
+  --description="Allow workstation internal communication"
+
+# Configure Cloud NAT for outbound traffic
+gcloud compute routers create nat-router \
+  --network=default \
+  --region=asia-east1
+
+gcloud compute routers nats create nat-config \
+  --router=nat-router \
+  --region=asia-east1 \
+  --auto-allocate-nat-external-ips \
+  --nat-all-subnet-ip-ranges
+                    </code></pre>
+                </div>
+            </div>
+
+            <div class="issue-card warning">
+                <h4><i class="fas fa-hdd"></i> Disk Space Issues</h4>
+                <p>Workstation running out of storage</p>
+                <div class="code-container">
+                    <pre><code class="language-bash">
+# Check current disk usage
+gcloud workstations describe $WORKSTATION_NAME \
+  --cluster=$CLUSTER \
+  --config=$CONFIG \
+  --region=$REGION \
+  --format="value(diskSizeGb)"
+
+# Increase disk size
+gcloud workstations configs update $CONFIG \
+  --cluster=$CLUSTER \
+  --region=$REGION \
+  --disk-size=200GB
+
+# Enable disk autoscaling
+gcloud workstations configs update $CONFIG \
+  --cluster=$CLUSTER \
+  --region=$REGION \
+  --enable-disk-autoscaling
+
+# Clean up temporary files (run inside workstation)
+sudo find /tmp -type f -atime +1 -delete
+sudo docker system prune -f
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+```
+
+## 🔐 **Security Hardening**
+
+### **Advanced Security Configurations**
+
+```html
+<section id="security-hardening">
+    <h2 class="section-title"><i class="fas fa-lock"></i> Security Hardening</h2>
+    
+    <div class="card">
+        <h3>Zero-Trust Security Model</h3>
+        
+        <div class="steps-container">
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h3>VPC Service Controls</h3>
+                    <p>Protect against data exfiltration with service perimeters</p>
+                    <div class="code-container">
+                        <pre><code class="language-bash">
+# Create access context manager policy
+gcloud access-context-manager policies create \
+  --organization=123456789 \
+  --title="Organization Security Policy"
+
+# Create service perimeter for workstations
+gcloud access-context-manager perimeters create workstations-perimeter \
+  --title="Workstations Security Perimeter" \
+  --resources=projects/monospace-10,projects/monospace-dev,projects/monospace-prod \
+  --restricted-services=workstations.googleapis.com,compute.googleapis.com,storage.googleapis.com \
+  --policy=my-policy
+
+# Add ingress rules for approved networks
+gcloud access-context-manager perimeters update workstations-perimeter \
+  --add-ingress-policies=ingress-from-corporate \
+  --policy=my-policy
+                        </code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h3>Identity-Aware Proxy (IAP) Integration</h3>
+                    <p>Secure access to workstations with context-aware authentication</p>
+                    <div class="code-container">
+                        <pre><code class="language-bash">
+# Enable IAP for Compute Engine
+gcloud services enable iap.googleapis.com
+
+# Grant IAP permissions to users
+gcloud projects add-iam-policy-binding monospace-10 \
+  --member=user:developer@company.com \
+  --role=roles/iap.httpsResourceAccessor
+
+# Configure IAP settings
+gcloud compute project-info add-metadata \
+  --metadata=enable-oslogin=TRUE
+
+# Create IAP-based firewall rule
+gcloud compute firewall-rules create allow-iap-ssh \
+  --network=default \
+  --allow=tcp:22 \
+  --source-ranges=35.235.240.0/20 \
+  --description="Allow SSH from IAP"
+                        </code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h3>Encryption & Key Management</h3>
+                    <p>Implement customer-managed encryption keys (CMEK)</p>
+                    <div class="code-container">
+                        <pre><code class="language-bash">
+# Create KMS key for workstation encryption
+gcloud kms keyrings create workstation-keys \
+  --location=global
+
+gcloud kms keys create workstation-disk-encryption \
+  --keyring=workstation-keys \
+  --location=global \
+  --purpose=encryption \
+  --protection-level=hsm \
+  --rotation-period=90d \
+  --next-rotation-time=$(date -d "+90 days" +%Y-%m-%d)
+
+# Grant encryption permissions to Compute Engine service account
+gcloud kms keys add-iam-policy-binding workstation-disk-encryption \
+  --keyring=workstation-keys \
+  --location=global \
+  --member=serviceAccount:service-712605920671@compute-system.iam.gserviceaccount.com \
+  --role=roles/cloudkms.cryptoKeyEncrypterDecrypter
+
+# Configure workstation with CMEK
+gcloud workstations configs update monospace-config-web \
+  --cluster=workstation-cluster-5 \
+  --region=asia-east1 \
+  --kms-key=projects/monospace-10/locations/global/keyRings/workstation-keys/cryptoKeys/workstation-disk-encryption
+                        </code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+```
+
+## 📊 **Performance Optimization**
+
+### **Advanced Performance Tuning**
+
+```html
+<section id="performance-tuning">
+    <h2 class="section-title"><i class="fas fa-tachometer-alt"></i> Performance Tuning</h2>
+    
+    <div class="card">
+        <h3>Resource Optimization Strategies</h3>
+        
+        <div class="troubleshooting-grid">
+            <div class="issue-card">
+                <h4><i class="fas fa-memory"></i> Memory Optimization</h4>
+                <p>Optimize memory usage for development workloads</p>
+                <div class="code-container">
+                    <pre><code class="language-bash">
+# Monitor memory usage
+gcloud monitoring dashboards create \
+  --config-from-file=memory-monitoring.json
+
+# Configure swap for memory-intensive workloads
+gcloud workstations configs update monospace-config-web \
+  --cluster=workstation-cluster-5 \
+  --region=asia-east1 \
+  --container-run-args="--memory=8g --memory-swap=16g"
+
+# Set up memory limits in container
+gcloud workstations configs update monospace-config-web \
+  --cluster=workstation-cluster-5 \
+  --region=asia-east1 \
+  --container-env-vars="NODE_OPTIONS=--max-old-space-size=6144"
+                    </code></pre>
+                </div>
+            </div>
+
+            <div class="issue-card warning">
+                <h4><i class="fas fa-cpu"></i> CPU Optimization</h4>
+                <p>Right-size CPU resources based on workload patterns</p>
+                <div class="code-container">
+                    <pre><code class="language-bash">
+# Analyze CPU usage patterns
+gcloud monitoring metrics read \
+  "compute.googleapis.com/instance/cpu/utilization" \
+  --filter='resource.labels.instance_id =~ "workstation-*"' \
+  --aligner=ALIGN_MEAN \
+  --interval=86400s
+
+# Scale machine type based on usage
+gcloud workstations configs update monospace-config-web \
+  --cluster=workstation-cluster-5 \
+  --region=asia-east1 \
+  --machine-type=n2-standard-8
+
+# Configure CPU limits
+gcloud workstations configs update monospace-config-web \
+  --cluster=workstation-cluster-5 \
+  --region=asia-east1 \
+  --container-run-args="--cpus=4.0"
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Auto-Scaling Configuration</h3>
+        
+        <div class="code-container">
+            <pre><code class="language-json">
+{
+  "autoScaling": {
+    "minInstances": 2,
+    "maxInstances": 20,
+    "scaleDownDelay": "1800s",
+    "metrics": [
+      {
+        "metric": "workstations.googleapis.com/instance/cpu/utilization",
+        "target": 0.7
+      },
+      {
+        "metric": "workstations.googleapis.com/instance/memory/utilization", 
+        "target": 0.8
+      }
+    ],
+    "schedules": [
+      {
+        "name": "business-hours",
+        "description": "Scale up during business hours",
+        "timeZone": "America/New_York", 
+        "startTime": "0 9 * * 1-5",
+        "endTime": "0 17 * * 1-5",
+        "minInstances": 5
+      },
+      {
+        "name": "weekends",
+        "description": "Scale down on weekends",
+        "timeZone": "America/New_York",
+        "startTime": "0 0 * * 0", 
+        "endTime": "0 0 * * 1",
+        "minInstances": 1
+      }
+    ]
+  }
+}
+            </code></pre>
+        </div>
+    </div>
+</section>
+```
+
+## 🔄 **Automation & Scripting**
+
+### **Bash Automation Scripts**
+
+```html
+<section id="automation-scripts">
+    <h2 class="section-title"><i class="fas fa-robot"></i> Automation & Scripting</h2>
+    
+    <div class="card">
+        <h3>Workstation Lifecycle Management</h3>
+        
+        <div class="code-container">
+            <div class="code-header">
+                <span>workstation-manager.sh</span>
+                <button class="copy-btn" onclick="copyCode(this)"><i class="fas fa-copy"></i> Copy</button>
+            </div>
+            <pre><code class="language-bash">
+#!/bin/bash
+
+# Workstation Management Script
+set -e
+
+PROJECT="monospace-10"
+REGION="asia-east1" 
+CLUSTER="workstation-cluster-5"
+CONFIG="monospace-config-web"
+
+# Function to start workstation
+start_workstation() {
+    local workstation=$1
+    echo "🚀 Starting workstation: $workstation"
+    
+    gcloud workstations start "$workstation" \
+        --cluster=$CLUSTER \
+        --config=$CONFIG \
+        --region=$REGION \
+        --project=$PROJECT
+    
+    # Wait for workstation to be ready
+    while true; do
+        STATUS=$(gcloud workstations describe "$workstation" \
+            --cluster=$CLUSTER \
+            --region=$REGION \
+            --format="value(state)")
+        
+        if [ "$STATUS" = "RUNNING" ]; then
+            echo "✅ Workstation $workstation is running"
+            break
+        elif [ "$STATUS" = "STARTING" ]; then
+            echo "⏳ Workstation $workstation is starting..."
+            sleep 10
+        else
+            echo "❌ Workstation $workstation failed to start. Status: $STATUS"
+            exit 1
+        fi
+    done
+}
+
+# Function to stop workstation  
+stop_workstation() {
+    local workstation=$1
+    echo "🛑 Stopping workstation: $workstation"
+    
+    gcloud workstations stop "$workstation" \
+        --cluster=$CLUSTER \
+        --config=$CONFIG \
+        --region=$REGION \
+        --project=$PROJECT
+}
+
+# Function to create workstation
+create_workstation() {
+    local workstation=$1
+    local owner=$2
+    
+    echo "🆕 Creating workstation: $workstation for $owner"
+    
+    gcloud workstations create "$workstation" \
+        --cluster=$CLUSTER \
+        --config=$CONFIG \
+        --region=$REGION \
+        --project=$PROJECT \
+        --labels=owner="$owner",environment="development"
+}
+
+# Function to list all workstations
+list_workstations() {
+    echo "📋 Listing all workstations:"
+    
+    gcloud workstations list \
+        --cluster=$CLUSTER \
+        --region=$REGION \
+        --project=$PROJECT \
+        --format="table(name, state, createTime, labels.owner)"
+}
+
+# Function to cleanup old workstations
+cleanup_workstations() {
+    local days_old=$1
+    
+    echo "🧹 Cleaning up workstations older than $days_old days"
+    
+    OLD_WORKSTATIONS=$(gcloud workstations list \
+        --cluster=$CLUSTER \
+        --region=$REGION \
+        --project=$PROJECT \
+        --filter="createTime < -P${days_old}D AND state:STOPPED" \
+        --format="value(name)")
+    
+    for workstation in $OLD_WORKSTATIONS; do
+        echo "Deleting workstation: $workstation"
+        gcloud workstations delete "$workstation" \
+            --cluster=$CLUSTER \
+            --region=$REGION \
+            --project=$PROJECT \
+            --quiet
+    done
+}
+
+# Main script logic
+case "${1:-}" in
+    start)
+        start_workstation "$2"
+        ;;
+    stop)
+        stop_workstation "$2"  
+        ;;
+    create)
+        create_workstation "$2" "$3"
+        ;;
+    list)
+        list_workstations
+        ;;
+    cleanup)
+        cleanup_workstations "${2:-30}"
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|create|list|cleanup} [workstation_name] [owner]"
+        echo "Example: $0 start idx-studio-1746147003713"
+        echo "Example: $0 create new-dev-workstation alice@company.com"
+        exit 1
+        ;;
+esac
+            </code></pre>
+        </div>
+    </div>
+</section>
+```
+
+## 🌐 **Integration Examples**
+
+### **VS Code Integration**
+
+```html
+<section id="vscode-integration">
+    <h2 class="section-title"><i class="fas fa-code"></i> VS Code Integration</h2>
+    
+    <div class="card">
+        <h3>Remote Development Setup</h3>
+        
+        <div class="code-container">
+            <div class="code-header">
+                <span>.vscode/settings.json</span>
+                <button class="copy-btn" onclick="copyCode(this)"><i class="fas fa-copy"></i> Copy</button>
+            </div>
+            <pre><code class="language-json">
+{
+  "workstation.name": "idx-studio-1746147003713",
+  "workstation.cluster": "workstation-cluster-5", 
+  "workstation.config": "monospace-config-web",
+  "workstation.region": "asia-east1",
+  
+  "terminal.integrated.shell.linux": "/bin/bash",
+  "python.pythonPath": "/usr/bin/python3",
+  "typescript.tsdk": "node_modules/typescript/lib",
+  
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/.git": true,
+    "**/__pycache__": true
+  },
+  
+  "extensions": [
+    "ms-python.python",
+    "bradlc.vscode-tailwindcss", 
+    "esbenp.prettier-vscode",
+    "ms-vscode.vscode-typescript-next",
+    "googlecloudtools.cloudcode"
+  ]
+}
+            </code></pre>
+        </div>
+
+        <div class="code-container">
+            <div class="code-header">
+                <span>VS Code Launch Configuration</span>
+                <button class="copy-btn" onclick="copyCode(this)"><i class="fas fa-copy"></i> Copy</button>
+            </div>
+            <pre><code class="language-json">
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Current File",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    },
+    {
+      "name": "Node.js: Debug",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/index.js",
+      "runtimeExecutable": "node",
+      "env": {
+        "NODE_ENV": "development"
+      }
+    },
+    {
+      "name": "Debug Flask App",
+      "type": "python",
+      "request": "launch",
+      "module": "flask",
+      "env": {
+        "FLASK_APP": "src/app.py",
+        "FLASK_ENV": "development"
+      },
+      "args": ["run", "--host=0.0.0.0", "--port=5000"]
+    }
+  ]
+}
+            </code></pre>
+        </div>
+    </div>
+</section>
+```
+
+## 📈 **Monitoring Dashboard**
+
+### **Cloud Monitoring Setup**
+
+```html
+<section id="monitoring-dashboard">
+    <h2 class="section-title"><i class="fas fa-chart-line"></i> Monitoring Dashboard</h2>
+    
+    <div class="card">
+        <h3>Comprehensive Monitoring Configuration</h3>
+        
+        <div class="code-container">
+            <div class="code-header">
+                <span>monitoring-dashboard.json</span>
+                <button class="copy-btn" onclick="copyCode(this)"><i class="fas fa-copy"></i> Copy</button>
+            </div>
+            <pre><code class="language-json">
+{
+  "displayName": "Cloud Workstations Dashboard",
+  "gridLayout": {
+    "columns": "2",
+    "widgets": [
+      {
+        "title": "Workstation CPU Utilization",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"compute.googleapis.com/instance/cpu/utilization\" resource.type=\"cloud_workstation\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_MEAN"
+                  }
+                }
+              },
+              "plotType": "LINE"
+            }
+          ],
+          "yAxis": {
+            "label": "CPU Utilization",
+            "scale": "LINEAR"
+          }
+        }
+      },
+      {
+        "title": "Workstation Memory Usage", 
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"compute.googleapis.com/instance/memory/bytes_used\" resource.type=\"cloud_workstation\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s", 
+                    "perSeriesAligner": "ALIGN_MEAN"
+                  }
+                }
+              },
+              "plotType": "LINE"
+            }
+          ],
+          "yAxis": {
+            "label": "Memory Bytes",
+            "scale": "LINEAR"
+          }
+        }
+      },
+      {
+        "title": "Active Workstations",
+        "scorecard": {
+          "timeSeriesQuery": {
+            "timeSeriesFilter": {
+              "filter": "metric.type=\"workstations.googleapis.com/instance/active_count\"",
+              "aggregation": {
+                "alignmentPeriod": "300s",
+                "perSeriesAligner": "ALIGN_MAX"
+              }
+            }
+          },
+          "sparkChartView": {
+            "sparkChartType": "SPARK_LINE"
+          }
+        }
+      },
+      {
+        "title": "Workstation Operations",
+        "logsPanel": {
+          "filter": "resource.type=\"cloud_workstation\" severity>=INFO",
+          "resourceNames": ["projects/monospace-10"]
+        }
+      }
+    ]
+  }
+}
+            </code></pre>
+        </div>
+    </div>
+</section>
+```
+
+## 🔄 **Updated Navigation**
+
+Add these new sections to your sidebar:
+
+```html
+<ul>
+    <li><a href="#custom-containers"><i class="fas fa-box"></i> Custom Containers</a></li>
+    <li><a href="#advanced-troubleshooting"><i class="fas fa-stethoscope"></i> Advanced Troubleshooting</a></li>
+    <li><a href="#security-hardening"><i class="fas fa-lock"></i> Security Hardening</a></li>
+    <li><a href="#performance-tuning"><i class="fas fa-tachometer-alt"></i> Performance Tuning</a></li>
+    <li><a href="#automation-scripts"><i class="fas fa-robot"></i> Automation Scripts</a></li>
+    <li><a href="#vscode-integration"><i class="fas fa-code"></i> VS Code Integration</a></li>
+    <li><a href="#monitoring-dashboard"><i class="fas fa-chart-line"></i> Monitoring Dashboard</a></li>
+    <li><a href="#enterprise-architecture"><i class="fas fa-sitemap"></i> Enterprise Architecture</a></li>
+</ul>
+```
+
+These comprehensive additions provide:
+
+1. **Custom container development** with Dockerfile examples
+2. **Advanced troubleshooting** with diagnostic scripts
+3. **Security hardening** with zero-trust principles
+4. **Performance optimization** with auto-scaling
+5. **Automation scripts** for lifecycle management
+6. **VS Code integration** for seamless development
+7. **Monitoring dashboards** for operational visibility
+
+The documentation now covers the complete spectrum from basic setup to enterprise-grade deployment with advanced configurations and best practices.
